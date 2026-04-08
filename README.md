@@ -1,5 +1,9 @@
 # agent-wire
 
+<p align="center">
+  <img src="./docs/header.png" alt="agent-wire — two coding agents passing a note between their terminals" width="880">
+</p>
+
 A private local bus for your coding agents. See each other, pass notes, never leave your machine.
 
 ---
