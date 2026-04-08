@@ -1,0 +1,29 @@
+{
+  "name": "agent-wire",
+  "version": "0.1.0",
+  "description": "Private local bus for coding agents. See each other, pass notes, questions, requests — with push into Claude Code via Channels.",
+  "type": "module",
+  "bin": {
+    "agent-wire": "./dist/daemon/index.js",
+    "agent-wire-bridge": "./dist/bridge/index.js"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev:daemon": "tsx src/daemon/index.ts",
+    "dev:bridge": "tsx src/bridge/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": { "node": ">=20" }
+}
