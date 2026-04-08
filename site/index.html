@@ -143,12 +143,12 @@
        (background-image + cover cannot do "push down 100px" cleanly) */
     .hero-bg {
       position: absolute;
-      top: 200px;               /* ← vertical offset to clear the title area */
+      top: 100px;               /* ← vertical offset to clear the title area */
       left: 50%;
       transform: translateX(-50%);
       min-width: 100%;
       width: 100%;
-      height: calc(100% - 200px);
+      height: calc(100% - 100px);
       object-fit: cover;
       object-position: center 58%;
       z-index: 0;
@@ -255,7 +255,7 @@
     /* mobile fallback: hero shorter, less aggressive offset */
     @media (max-width: 820px) {
       .hero { height: auto; min-height: 640px; }
-      .hero-bg { top: 120px; height: calc(100% - 120px); }
+      .hero-bg { top: 60px; height: calc(100% - 60px); }
       .hero-top { padding-top: clamp(88px, 14vh, 130px); }
       .hero-bottom { padding-bottom: 64px; }
     }
