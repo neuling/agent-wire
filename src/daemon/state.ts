@@ -63,10 +63,25 @@ export class State {
   }
 
   get(name: string): Agent | undefined { return this.agents.get(name) }
+  getById(id: string): Agent | undefined { return [...this.agents.values()].find(a => a.id === id) }
   list(): Agent[] { return [...this.agents.values()] }
 
+  reapStale(maxAgeMs: number = 30_000): string[] {
+    const reaped: string[] = []
+    const now = Date.now()
+    for (const agent of this.agents.values()) {
+      if (now - Date.parse(agent.last_activity) > maxAgeMs) {
+        reaped.push(agent.name)
+      }
+    }
+    for (const name of reaped) {
+      this.deregister(name)
+    }
+    return reaped
+  }
+
   setStatus(agentId: string, status: string) {
-    const agent = [...this.agents.values()].find(a => a.id === agentId)
+    const agent = this.getById(agentId)
     if (!agent) throw new Error(`unknown agent_id: ${agentId}`)
     agent.status = status
     agent.last_activity = new Date().toISOString()
@@ -74,7 +89,7 @@ export class State {
   }
 
   touch(agentId: string) {
-    const agent = [...this.agents.values()].find(a => a.id === agentId)
+    const agent = this.getById(agentId)
     if (agent) agent.last_activity = new Date().toISOString()
   }
 

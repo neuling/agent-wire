@@ -48,3 +48,5 @@ export const LogInput = z.object({
 export const LogReadInput = z.object({
   since: z.string().optional(),
 })
+
+export const DeregisterInput = z.object({ agent_id: z.string() })

@@ -81,4 +81,31 @@ describe('dispatchTool', () => {
     const res = await dispatchTool(s, { tool: 'wire_bogus', args: {} } as any)
     expect(res.ok).toBe(false)
   })
+
+  it('wire_deregister removes the agent and is idempotent', async () => {
+    const reg = await dispatchTool(s, { tool: 'wire_register', args: { name: 'a', working_dir: '/tmp', description: '', context: {} }, supports_push: false })
+    const r1 = await dispatchTool(s, { tool: 'wire_deregister', args: { agent_id: reg.data.agent_id } })
+    expect(r1.ok).toBe(true)
+    expect(s.get('a')).toBeUndefined()
+    // second call is a no-op, still ok
+    const r2 = await dispatchTool(s, { tool: 'wire_deregister', args: { agent_id: reg.data.agent_id } })
+    expect(r2.ok).toBe(true)
+  })
+
+  it('piggybacks pending on wire_list when caller identity is known', async () => {
+    const a = await dispatchTool(s, { tool: 'wire_register', args: { name: 'a', working_dir: '/tmp', description: '', context: {} }, supports_push: false })
+    await dispatchTool(s, { tool: 'wire_register', args: { name: 'b', working_dir: '/tmp', description: '', context: {} }, supports_push: false })
+    await dispatchTool(s, { tool: 'wire_send', args: { to: 'a', kind: 'note', body: 'hi', priority: 'normal' }, agent_name: 'b' })
+    const listRes = await dispatchTool(s, { tool: 'wire_list', args: {}, agent_id: a.data.agent_id })
+    expect(listRes.pending?.length).toBe(1)
+    expect(listRes.pending?.[0].body).toBe('hi')
+  })
+
+  it('piggybacks pending on wire_describe as well', async () => {
+    const a = await dispatchTool(s, { tool: 'wire_register', args: { name: 'a', working_dir: '/tmp', description: '', context: {} }, supports_push: false })
+    await dispatchTool(s, { tool: 'wire_register', args: { name: 'b', working_dir: '/tmp', description: '', context: {} }, supports_push: false })
+    await dispatchTool(s, { tool: 'wire_send', args: { to: 'a', kind: 'note', body: 'hi', priority: 'normal' }, agent_name: 'b' })
+    const dres = await dispatchTool(s, { tool: 'wire_describe', args: { agent: 'b' }, agent_id: a.data.agent_id })
+    expect(dres.pending?.length).toBe(1)
+  })
 })

@@ -8,8 +8,21 @@ async function main() {
   const state = new State()
   const srv = await startServer(state, PORT)
   console.error(`[agent-wire] daemon on http://127.0.0.1:${srv.port}`)
-  process.on('SIGINT',  async () => { await srv.close(); process.exit(0) })
-  process.on('SIGTERM', async () => { await srv.close(); process.exit(0) })
+
+  const reaper = setInterval(() => {
+    const reaped = state.reapStale()
+    if (reaped.length > 0) {
+      console.error(`[agent-wire] reaped stale agents: ${reaped.join(', ')}`)
+    }
+  }, 15_000)
+  reaper.unref?.()
+
+  const cleanup = async () => {
+    clearInterval(reaper)
+    await srv.close()
+  }
+  process.on('SIGINT',  async () => { await cleanup(); process.exit(0) })
+  process.on('SIGTERM', async () => { await cleanup(); process.exit(0) })
 }
 
 main().catch(e => { console.error(e); process.exit(1) })

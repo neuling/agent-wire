@@ -5,9 +5,10 @@
   "type": "module",
   "bin": {
     "agent-wire": "./dist/daemon/index.js",
-    "agent-wire-bridge": "./dist/bridge/index.js"
+    "agent-wire-bridge": "./dist/bridge/index.js",
+    "wire-claude": "./bin/wire-claude"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": ["dist", "README.md", "LICENSE", "bin"],
   "scripts": {
     "build": "tsc && mkdir -p dist/dashboard && cp src/dashboard/index.html dist/dashboard/index.html",
     "prepublishOnly": "pnpm build && pnpm test",

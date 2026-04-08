@@ -1,7 +1,34 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { execSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { AgentContext } from '../daemon/types.js'
+
+/** Walk up from dir looking for CLAUDE.md or .claude/CLAUDE.md. Returns first found path or null. */
+export function findClaudeMd(dir: string): string | null {
+  let current = dir
+  while (true) {
+    const candidates = [
+      join(current, 'CLAUDE.md'),
+      join(current, '.claude', 'CLAUDE.md'),
+    ]
+    for (const p of candidates) {
+      if (existsSync(p)) return p
+    }
+    // Check if we're at a git root or filesystem root
+    const isGitRoot = existsSync(join(current, '.git'))
+    const parent = dirname(current)
+    if (isGitRoot || parent === current) break
+    current = parent
+  }
+  return null
+}
+
+/** Read file at path and return first 16 chars of its SHA-256 hex digest. */
+export function hashClaudeMd(filePath: string): string {
+  const content = readFileSync(filePath, 'utf8')
+  return createHash('sha256').update(content).digest('hex').slice(0, 16)
+}
 
 export function sniffProject(dir: string): Pick<AgentContext, 'repo' | 'manifest'> {
   const out: Pick<AgentContext, 'repo' | 'manifest'> = {}

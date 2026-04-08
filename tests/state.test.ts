@@ -70,4 +70,24 @@ describe('State', () => {
     expect(s.get('a')).toBeUndefined()
     expect(events[0].type).toBe('agent_left')
   })
+
+  it('reapStale drops agents whose last_activity is older than the threshold', async () => {
+    const s2 = new State()
+    s2.register({ name: 'a', description: '', working_dir: '/tmp', supports_push: false, context: {} })
+    s2.register({ name: 'b', description: '', working_dir: '/tmp', supports_push: false, context: {} })
+    // force a's last_activity into the past
+    const agent = s2.get('a')!
+    ;(agent as any).last_activity = new Date(Date.now() - 60_000).toISOString()
+    const reaped = s2.reapStale(30_000)
+    expect(reaped).toEqual(['a'])
+    expect(s2.get('a')).toBeUndefined()
+    expect(s2.get('b')).toBeDefined()
+  })
+
+  it('getById finds an agent by uuid', () => {
+    const s2 = new State()
+    const { agent } = s2.register({ name: 'a', description: '', working_dir: '/tmp', supports_push: false, context: {} })
+    expect(s2.getById(agent.id)?.name).toBe('a')
+    expect(s2.getById('nope')).toBeUndefined()
+  })
 })

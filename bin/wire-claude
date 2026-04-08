@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# wire-claude — launch Claude Code with agent-wire channel push enabled.
+#
+# Why this exists: the Channels API is in research preview, so custom channels
+# need the --dangerously-load-development-channels flag until they're on the
+# approved allowlist. This wrapper hides that.
+exec claude --dangerously-load-development-channels server:agent-wire "$@"
