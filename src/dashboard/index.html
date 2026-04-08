@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>agent-wire</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0a0a0a;
+  --bg-panel: #111111;
+  --bg-card: #161616;
+  --bg-card-hover: #1c1c1c;
+  --bg-chip: #1e2a1e;
+  --border: #222222;
+  --border-subtle: #1a1a1a;
+  --text: #e8e8e8;
+  --text-muted: #6b6b6b;
+  --text-dim: #3d3d3d;
+  --text-secondary: #999999;
+  --accent: #22c55e;
+  --accent-dim: #16a34a;
+  --accent-bg: rgba(34, 197, 94, 0.08);
+  --accent-glow: rgba(34, 197, 94, 0.15);
+  --yellow: #eab308;
+  --red: #ef4444;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Monaco, "Consolas", monospace;
+  --font-ui: -apple-system, system-ui, "Segoe UI", sans-serif;
+  --topbar-h: 44px;
+  --col-agents: 272px;
+  --col-log: 312px;
+  --radius: 6px;
+  --radius-sm: 4px;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 13px; line-height: 1.5; }
+
+/* ── Topbar ─────────────────────────────────────────────────────── */
+#topbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--topbar-h);
+  background: rgba(10,10,10,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 0; padding: 0 16px;
+}
+#brand {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+  color: var(--accent); letter-spacing: -0.02em; flex-shrink: 0;
+}
+#stats {
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
+  margin-left: 20px; letter-spacing: 0.01em;
+}
+#stats span { color: var(--text-secondary); }
+.topbar-spacer { flex: 1; }
+#sse-indicator {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+}
+.pulse-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-dim); flex-shrink: 0;
+  transition: background 0.3s;
+}
+.pulse-dot.connected {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+  animation: pulse 2s ease-in-out infinite;
+}
+.pulse-dot.disconnected { background: var(--red); }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── Layout ─────────────────────────────────────────────────────── */
+#layout {
+  display: flex; flex-direction: row;
+  padding-top: var(--topbar-h);
+  height: 100vh;
+  overflow: hidden;
+}
+#col-agents {
+  width: var(--col-agents); flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+#col-feed {
+  flex: 1; min-width: 0;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+#col-log {
+  width: var(--col-log); flex-shrink: 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Column headers ─────────────────────────────────────────────── */
+.col-header {
+  height: 38px; flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 14px; gap: 8px;
+  background: var(--bg-panel);
+}
+.col-title {
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.07em;
+}
+.col-count {
+  font-family: var(--font-mono); font-size: 10px;
+  background: var(--border); color: var(--text-muted);
+  padding: 1px 6px; border-radius: 10px; letter-spacing: 0;
+}
+.col-spacer { flex: 1; }
+
+/* ── Scrollable body ─────────────────────────────────────────────── */
+.col-body {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+}
+.col-body::-webkit-scrollbar { width: 4px; }
+.col-body::-webkit-scrollbar-track { background: transparent; }
+.col-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── Agent cards ─────────────────────────────────────────────────── */
+.agent-card {
+  position: relative;
+  padding: 10px 14px 10px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.agent-card:hover { background: var(--bg-card); }
+.agent-card.expanded { background: var(--bg-card); }
+.agent-stripe {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  border-radius: 0 2px 2px 0;
+}
+.agent-row1 { display: flex; align-items: center; gap: 7px; }
+.agent-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.agent-dot.green { background: var(--accent); box-shadow: 0 0 5px var(--accent-glow); }
+.agent-dot.yellow { background: var(--yellow); }
+.agent-dot.gray { background: var(--text-dim); }
+.agent-name {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+  color: var(--text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.agent-time {
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+  flex-shrink: 0;
+}
+.agent-desc {
+  margin-top: 2px; padding-left: 14px;
+  font-size: 11px; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.agent-meta {
+  margin-top: 3px; padding-left: 14px;
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.agent-expand {
+  margin-top: 8px; padding-left: 14px;
+  display: none;
+}
+.agent-card.expanded .agent-expand { display: block; }
+.expand-section { margin-top: 6px; }
+.expand-label {
+  font-size: 10px; font-weight: 600; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 4px;
+}
+.expand-pre {
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+  white-space: pre-wrap; word-break: break-word; line-height: 1.6;
+  max-height: 120px; overflow-y: auto;
+  background: var(--bg); padding: 6px 8px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.chip {
+  font-family: var(--font-mono); font-size: 10px;
+  background: var(--bg-chip); color: var(--accent-dim);
+  padding: 2px 7px; border-radius: 3px; border: 1px solid rgba(34,197,94,0.15);
+}
+
+/* ── Activity feed ───────────────────────────────────────────────── */
+#feed-filter {
+  font-family: var(--font-mono); font-size: 10px;
+  background: var(--bg-card); color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 3px 6px; cursor: pointer; outline: none;
+  -webkit-appearance: none; appearance: none;
+}
+#feed-filter:focus { border-color: var(--accent); }
+
+.feed-empty {
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; padding: 40px 24px; text-align: center;
+}
+.feed-empty-text {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-dim); line-height: 1.8; max-width: 280px;
+}
+
+.feed-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  position: relative; cursor: default;
+  animation: fadeIn 0.2s ease-out;
+}
+.feed-item:hover { background: var(--bg-card); }
+.feed-item:hover .feed-copy { opacity: 1; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.feed-stripe {
+  width: 2px; flex-shrink: 0; border-radius: 1px;
+  align-self: stretch; min-height: 14px;
+}
+.feed-icon {
+  font-size: 10px; color: var(--text-dim); flex-shrink: 0;
+  width: 12px; text-align: center; padding-top: 1px;
+}
+.feed-body { flex: 1; min-width: 0; }
+.feed-agents {
+  font-family: var(--font-mono); font-size: 11px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.feed-agents .fa-name { font-weight: 500; }
+.feed-text {
+  font-size: 11px; color: var(--text-muted); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.feed-right { flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
+.feed-ts {
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+  white-space: nowrap;
+}
+.feed-copy {
+  font-family: var(--font-mono); font-size: 9px;
+  background: var(--bg-card); color: var(--text-muted);
+  border: 1px solid var(--border); border-radius: 3px;
+  padding: 2px 5px; cursor: pointer; opacity: 0; transition: opacity 0.1s;
+  white-space: nowrap;
+}
+.feed-copy:hover { color: var(--text); border-color: var(--text-muted); }
+.kind-note { color: var(--text-secondary); }
+.kind-question { color: #60a5fa; }
+.kind-request { color: #f97316; }
+
+/* ── Decisions log ───────────────────────────────────────────────── */
+.log-item {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  animation: fadeIn 0.2s ease-out;
+}
+.log-header { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
+.log-agent {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.log-ts {
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+  margin-left: auto;
+}
+.log-entry {
+  font-size: 11px; color: var(--text-muted); white-space: pre-wrap;
+  word-break: break-word; line-height: 1.6;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────── */
+#agents-empty {
+  padding: 20px 14px;
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+  text-align: center; line-height: 1.8;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  #layout { flex-direction: column; height: auto; overflow: auto; }
+  #col-agents, #col-feed, #col-log {
+    width: 100%; border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  #col-agents { height: auto; overflow: visible; }
+  #col-feed { height: 400px; }
+  #col-log { height: 300px; }
+  .col-body { overflow-y: auto; }
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div id="brand">agent-wire</div>
+  <div id="stats">
+    <span id="stat-agents">0</span> agents ·
+    <span id="stat-items">0</span> items ·
+    <span id="stat-logged">0</span> logged ·
+    uptime <span id="stat-uptime">—</span>
+  </div>
+  <div class="topbar-spacer"></div>
+  <div id="sse-indicator">
+    <div class="pulse-dot" id="pulse"></div>
+    <span id="sse-label">connecting</span>
+  </div>
+</div>
+
+<div id="layout">
+  <div id="col-agents">
+    <div class="col-header">
+      <span class="col-title">Agents</span>
+      <span class="col-count" id="agents-count">0</span>
+    </div>
+    <div class="col-body" id="agents-list">
+      <div id="agents-empty">No agents on the wire yet.</div>
+    </div>
+  </div>
+
+  <div id="col-feed">
+    <div class="col-header">
+      <span class="col-title">Activity</span>
+      <div class="col-spacer"></div>
+      <select id="feed-filter">
+        <option value="all">all</option>
+        <option value="presence">joined · left</option>
+        <option value="status">status</option>
+        <option value="items">items</option>
+        <option value="log">log</option>
+      </select>
+    </div>
+    <div class="col-body" id="feed-list">
+      <div class="feed-empty">
+        <div class="feed-empty-text">No agents on the wire yet.<br>Run <code>wire-claude</code> to launch a Claude Code session connected to agent-wire.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="col-log">
+    <div class="col-header">
+      <span class="col-title">Decisions</span>
+      <span class="col-count" id="log-count">0</span>
+    </div>
+    <div class="col-body" id="log-list"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+// ── State ─────────────────────────────────────────────────────────
+const agents = new Map();   // name → Agent
+const feedEvents = [];      // capped at 200
+const logEntries = [];      // newest first
+let itemsSent = 0;
+let startedAt = Date.now();
+let sseConnected = false;
+let renderPending = false;
+let feedFilter = 'all';
+
+// ── Color hash ────────────────────────────────────────────────────
+function agentColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  const hue = h % 360;
+  return `hsl(${hue}, 65%, 55%)`;
+}
+
+// ── Time helpers ──────────────────────────────────────────────────
+function relTime(iso) {
+  const diff = Math.max(0, Date.now() - new Date(iso).getTime());
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return s + 's ago';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+}
+
+function tsLabel(iso) {
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, '0');
+  return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+}
+
+function activityDot(lastActivity) {
+  const diff = Date.now() - new Date(lastActivity).getTime();
+  const m = diff / 60000;
+  if (m < 2) return 'green';
+  if (m < 10) return 'yellow';
+  return 'gray';
+}
+
+function shortenPath(p) {
+  const home = p.match(/^\/(?:Users|home)\/[^/]+(.*)$/);
+  if (home) return '~' + home[1];
+  return p;
+}
+
+function uptimeStr() {
+  const s = Math.floor((Date.now() - startedAt) / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+// ── Safe text node ────────────────────────────────────────────────
+function txt(s) { return document.createTextNode(String(s ?? '')); }
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = String(text);
+  return e;
+}
+
+// ── Render: topbar stats ──────────────────────────────────────────
+function renderStats() {
+  document.getElementById('stat-agents').textContent = agents.size;
+  document.getElementById('stat-items').textContent = itemsSent;
+  document.getElementById('stat-logged').textContent = logEntries.length;
+  document.getElementById('stat-uptime').textContent = uptimeStr();
+}
+
+// ── Render: agents panel ──────────────────────────────────────────
+const expandedAgents = new Set();
+
+function buildAgentCard(agent) {
+  const color = agentColor(agent.name);
+  const card = el('div', 'agent-card');
+  if (expandedAgents.has(agent.name)) card.classList.add('expanded');
+  card.dataset.name = agent.name;
+
+  const stripe = el('div', 'agent-stripe');
+  stripe.style.background = color;
+  card.appendChild(stripe);
+
+  const row1 = el('div', 'agent-row1');
+  const dot = el('div', 'agent-dot ' + activityDot(agent.last_activity));
+  const name = el('div', 'agent-name', agent.name);
+  const time = el('div', 'agent-time', relTime(agent.last_activity));
+  row1.appendChild(dot); row1.appendChild(name); row1.appendChild(time);
+  card.appendChild(row1);
+
+  if (agent.description) {
+    const desc = el('div', 'agent-desc', agent.description);
+    card.appendChild(desc);
+  }
+
+  const ctx = agent.context || {};
+  const repo = ctx.repo;
+  let metaParts = [];
+  if (agent.working_dir) metaParts.push(shortenPath(agent.working_dir));
+  if (repo && repo.branch) metaParts.push(repo.branch);
+  if (metaParts.length) {
+    card.appendChild(el('div', 'agent-meta', metaParts.join('  ')));
+  }
+
+  // Expanded section
+  const expand = el('div', 'agent-expand');
+  if (ctx.claude_md_summary) {
+    const sec = el('div', 'expand-section');
+    sec.appendChild(el('div', 'expand-label', 'Context'));
+    const pre = el('div', 'expand-pre', ctx.claude_md_summary);
+    sec.appendChild(pre);
+    expand.appendChild(sec);
+  }
+  const mf = ctx.manifest;
+  if (mf && mf.key_deps && mf.key_deps.length) {
+    const sec = el('div', 'expand-section');
+    sec.appendChild(el('div', 'expand-label', 'Key deps'));
+    const chips = el('div', 'chips');
+    mf.key_deps.forEach(d => chips.appendChild(el('span', 'chip', d)));
+    sec.appendChild(chips);
+    expand.appendChild(sec);
+  }
+  if (expand.children.length) card.appendChild(expand);
+
+  card.addEventListener('click', () => {
+    if (expandedAgents.has(agent.name)) expandedAgents.delete(agent.name);
+    else expandedAgents.add(agent.name);
+    card.classList.toggle('expanded');
+  });
+
+  return card;
+}
+
+function renderAgents() {
+  const list = document.getElementById('agents-list');
+  const empty = document.getElementById('agents-empty');
+  document.getElementById('agents-count').textContent = agents.size;
+
+  if (agents.size === 0) {
+    list.innerHTML = '';
+    if (!empty) {
+      const e = el('div', '', 'No agents on the wire yet.');
+      e.id = 'agents-empty';
+      list.appendChild(e);
+    } else {
+      list.appendChild(empty);
+    }
+    return;
+  }
+
+  const emptyEl = list.querySelector('#agents-empty');
+  if (emptyEl) emptyEl.remove();
+
+  const existing = new Map();
+  list.querySelectorAll('.agent-card').forEach(c => existing.set(c.dataset.name, c));
+
+  const fragment = document.createDocumentFragment();
+  agents.forEach((agent) => {
+    const newCard = buildAgentCard(agent);
+    fragment.appendChild(newCard);
+  });
+  list.innerHTML = '';
+  list.appendChild(fragment);
+}
+
+// ── Render: feed ──────────────────────────────────────────────────
+const FEED_ICONS = {
+  agent_joined: '●',
+  agent_left: '○',
+  status_changed: '◆',
+  item_note: '→',
+  item_question: '?',
+  item_request: '!',
+  log_appended: '✦',
+};
+
+function feedItemKind(ev) {
+  if (ev.type === 'item_sent') return 'item_' + ev.item.kind;
+  return ev.type;
+}
+
+function feedItemVisible(ev) {
+  if (feedFilter === 'all') return true;
+  if (feedFilter === 'presence') return ev.type === 'agent_joined' || ev.type === 'agent_left';
+  if (feedFilter === 'status') return ev.type === 'status_changed';
+  if (feedFilter === 'items') return ev.type === 'item_sent' || ev.type === 'item_read';
+  if (feedFilter === 'log') return ev.type === 'log_appended';
+  return true;
+}
+
+function buildFeedItem(ev) {
+  const kind = feedItemKind(ev);
+  const icon = FEED_ICONS[kind] || '·';
+
+  // Determine agent name for color
+  let agentName = '';
+  if (ev.type === 'agent_joined') agentName = ev.agent.name;
+  else if (ev.type === 'agent_left') agentName = ev.name;
+  else if (ev.type === 'status_changed') agentName = ev.name;
+  else if (ev.type === 'item_sent') agentName = ev.item.from;
+  else if (ev.type === 'item_read') agentName = ev.name;
+  else if (ev.type === 'log_appended') agentName = ev.entry.agent;
+
+  const color = agentName ? agentColor(agentName) : '#555';
+
+  const row = el('div', 'feed-item');
+
+  const stripe = el('div', 'feed-stripe');
+  stripe.style.background = color;
+  row.appendChild(stripe);
+
+  const iconEl = el('div', 'feed-icon', icon);
+  if (kind === 'item_note') iconEl.className += ' kind-note';
+  else if (kind === 'item_question') iconEl.className += ' kind-question';
+  else if (kind === 'item_request') iconEl.className += ' kind-request';
+  row.appendChild(iconEl);
+
+  const body = el('div', 'feed-body');
+
+  // Agents line
+  const agentsLine = el('div', 'feed-agents');
+  if (ev.type === 'agent_joined') {
+    const n = el('span', 'fa-name'); n.style.color = color; n.textContent = ev.agent.name;
+    agentsLine.appendChild(n);
+    agentsLine.appendChild(txt(' joined'));
+  } else if (ev.type === 'agent_left') {
+    const n = el('span', 'fa-name'); n.style.color = color; n.textContent = ev.name;
+    agentsLine.appendChild(n);
+    agentsLine.appendChild(txt(' left'));
+  } else if (ev.type === 'status_changed') {
+    const n = el('span', 'fa-name'); n.style.color = color; n.textContent = ev.name;
+    agentsLine.appendChild(n);
+    agentsLine.appendChild(txt(' status'));
+  } else if (ev.type === 'item_sent') {
+    const f = el('span', 'fa-name'); f.style.color = agentColor(ev.item.from); f.textContent = ev.item.from;
+    const t = el('span', 'fa-name'); t.style.color = agentColor(ev.item.to); t.textContent = ev.item.to;
+    agentsLine.appendChild(f);
+    agentsLine.appendChild(txt(' → '));
+    agentsLine.appendChild(t);
+    const kindLabel = el('span', ''); kindLabel.style.color = 'var(--text-dim)';
+    kindLabel.textContent = '  ' + ev.item.kind;
+    agentsLine.appendChild(kindLabel);
+  } else if (ev.type === 'item_read') {
+    const n = el('span', 'fa-name'); n.style.color = color; n.textContent = ev.name;
+    agentsLine.appendChild(n);
+    agentsLine.appendChild(txt(' read ' + ev.ids.length + ' item' + (ev.ids.length !== 1 ? 's' : '')));
+  } else if (ev.type === 'log_appended') {
+    const n = el('span', 'fa-name'); n.style.color = color; n.textContent = ev.entry.agent;
+    agentsLine.appendChild(n);
+    agentsLine.appendChild(txt(' logged'));
+  }
+  body.appendChild(agentsLine);
+
+  // Text preview
+  let preview = '';
+  if (ev.type === 'status_changed') preview = ev.status;
+  else if (ev.type === 'item_sent') preview = ev.item.body;
+  else if (ev.type === 'log_appended') preview = ev.entry.entry;
+  else if (ev.type === 'agent_joined' && ev.agent.description) preview = ev.agent.description;
+  if (preview) {
+    const textEl = el('div', 'feed-text', preview.split('\n')[0].slice(0, 120));
+    body.appendChild(textEl);
+  }
+  row.appendChild(body);
+
+  const right = el('div', 'feed-right');
+
+  const ts = el('div', 'feed-ts', ev._ts ? tsLabel(ev._ts) : '');
+  right.appendChild(ts);
+
+  const copyBtn = el('button', 'feed-copy', '{}');
+  copyBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(JSON.stringify(ev, null, 2)).catch(() => {});
+    copyBtn.textContent = 'copied';
+    setTimeout(() => { copyBtn.textContent = '{}'; }, 1200);
+  });
+  right.appendChild(copyBtn);
+
+  row.appendChild(right);
+  return row;
+}
+
+function renderFeed() {
+  const list = document.getElementById('feed-list');
+  const visible = feedEvents.filter(feedItemVisible);
+
+  if (visible.length === 0 && agents.size === 0) {
+    list.innerHTML = '';
+    const empty = el('div', 'feed-empty');
+    const msg = el('div', 'feed-empty-text');
+    msg.textContent = 'No agents on the wire yet. Run wire-claude to launch a Claude Code session connected to agent-wire.';
+    empty.appendChild(msg);
+    list.appendChild(empty);
+    return;
+  }
+
+  list.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  visible.forEach(ev => frag.appendChild(buildFeedItem(ev)));
+  list.appendChild(frag);
+}
+
+// ── Render: decisions log ─────────────────────────────────────────
+function buildLogItem(entry) {
+  const item = el('div', 'log-item');
+  const header = el('div', 'log-header');
+  const nameEl = el('div', 'log-agent', entry.agent);
+  nameEl.style.color = agentColor(entry.agent);
+  const tsEl = el('div', 'log-ts', tsLabel(entry.timestamp));
+  header.appendChild(nameEl);
+  header.appendChild(tsEl);
+  item.appendChild(header);
+  const entryEl = el('div', 'log-entry', entry.entry);
+  item.appendChild(entryEl);
+  return item;
+}
+
+function renderLog() {
+  const list = document.getElementById('log-list');
+  document.getElementById('log-count').textContent = logEntries.length;
+  list.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  logEntries.forEach(e => frag.appendChild(buildLogItem(e)));
+  list.appendChild(frag);
+}
+
+// ── Coalesced render ──────────────────────────────────────────────
+function scheduleRender() {
+  if (renderPending) return;
+  renderPending = true;
+  requestAnimationFrame(() => {
+    renderPending = false;
+    renderStats();
+    renderAgents();
+    renderFeed();
+    renderLog();
+  });
+}
+
+// ── SSE event application ─────────────────────────────────────────
+function pushEvent(ev) {
+  ev._ts = ev._ts || new Date().toISOString();
+  feedEvents.unshift(ev);
+  if (feedEvents.length > 200) feedEvents.length = 200;
+}
+
+function applyEvent(ev) {
+  ev._ts = ev._ts || new Date().toISOString();
+
+  switch (ev.type) {
+    case 'agent_joined':
+      agents.set(ev.agent.name, ev.agent);
+      pushEvent(ev);
+      break;
+    case 'agent_left':
+      agents.delete(ev.name);
+      pushEvent(ev);
+      break;
+    case 'status_changed': {
+      const a = agents.get(ev.name);
+      if (a) { a.status = ev.status; a.last_activity = new Date().toISOString(); }
+      pushEvent(ev);
+      break;
+    }
+    case 'item_sent':
+      itemsSent++;
+      pushEvent(ev);
+      break;
+    case 'item_read':
+      pushEvent(ev);
+      break;
+    case 'log_appended':
+      logEntries.unshift(ev.entry);
+      pushEvent(ev);
+      break;
+  }
+  scheduleRender();
+}
+
+// ── SSE connection ────────────────────────────────────────────────
+function setSseStatus(connected) {
+  sseConnected = connected;
+  const dot = document.getElementById('pulse');
+  const label = document.getElementById('sse-label');
+  dot.className = 'pulse-dot ' + (connected ? 'connected' : 'disconnected');
+  label.textContent = connected ? 'live' : 'reconnecting';
+}
+
+let sseRetryDelay = 1000;
+let sseTimer = null;
+
+function connectSSE() {
+  const src = new EventSource('/api/events');
+
+  src.onopen = () => {
+    sseRetryDelay = 1000;
+    setSseStatus(true);
+  };
+
+  src.onmessage = (e) => {
+    let ev;
+    try { ev = JSON.parse(e.data); } catch { return; }
+    applyEvent(ev);
+  };
+
+  src.onerror = () => {
+    src.close();
+    setSseStatus(false);
+    sseTimer = setTimeout(() => {
+      sseRetryDelay = Math.min(sseRetryDelay * 1.5, 30000);
+      connectSSE();
+    }, sseRetryDelay);
+  };
+}
+
+// ── Feed filter ───────────────────────────────────────────────────
+document.getElementById('feed-filter').addEventListener('change', function() {
+  feedFilter = this.value;
+  renderFeed();
+});
+
+// ── Uptime ticker ─────────────────────────────────────────────────
+setInterval(() => {
+  document.getElementById('stat-uptime').textContent = uptimeStr();
+  // refresh relative times
+  document.querySelectorAll('.agent-time').forEach(el => {
+    const card = el.closest('.agent-card');
+    if (card) {
+      const name = card.dataset.name;
+      const a = agents.get(name);
+      if (a) el.textContent = relTime(a.last_activity);
+    }
+  });
+}, 10000);
+
+// ── Initial load ──────────────────────────────────────────────────
+async function init() {
+  setSseStatus(false);
+
+  const [agentsRes, logRes] = await Promise.all([
+    fetch('/api/agents').then(r => r.json()).catch(() => []),
+    fetch('/api/log').then(r => r.json()).catch(() => []),
+  ]);
+
+  agentsRes.forEach(a => agents.set(a.name, a));
+  // log newest first
+  const sorted = [...logRes].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  sorted.forEach(e => logEntries.push(e));
+
+  scheduleRender();
+  connectSSE();
+}
+
+init();
+})();
+</script>
+</body>
+</html>

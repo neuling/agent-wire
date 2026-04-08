@@ -9,7 +9,7 @@
   },
   "files": ["dist", "README.md"],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/dashboard && cp src/dashboard/index.html dist/dashboard/index.html",
     "test": "vitest run",
     "test:watch": "vitest",
     "dev:daemon": "tsx src/daemon/index.ts",
