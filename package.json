@@ -19,7 +19,9 @@
   },
   "license": "MIT",
   "keywords": ["mcp", "claude-code", "agents", "multi-agent", "local", "dev-tools"],
-  "repository": { "type": "git", "url": "https://github.com/USERNAME/agent-wire.git" },
+  "repository": { "type": "git", "url": "git+https://github.com/neuling/agent-wire.git" },
+  "homepage": "https://github.com/neuling/agent-wire#readme",
+  "bugs": { "url": "https://github.com/neuling/agent-wire/issues" },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "zod": "^3.23.0"
