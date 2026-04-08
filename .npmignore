@@ -1,0 +1,12 @@
+src/
+tests/
+docs/
+node_modules/
+tsconfig.json
+vitest.config.ts
+agent-wire-spec.md
+.git/
+.gitignore
+.claude/
+*.log
+.DS_Store
