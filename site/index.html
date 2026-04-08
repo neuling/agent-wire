@@ -20,7 +20,18 @@
   <meta name="twitter:description" content="A private local bus for your coding agents. See each other, pass notes, never leave your machine.">
   <meta name="twitter:image" content="https://agent-wire.moritz.pro/header.png">
 
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a0a0a'/%3E%3Ccircle cx='10' cy='16' r='3' fill='%2322c55e'/%3E%3Ccircle cx='22' cy='16' r='3' fill='%2322c55e'/%3E%3Cpath d='M13 16 H19' stroke='%2322c55e' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a0a0a'/%3E%3Ccircle cx='10' cy='16' r='3' fill='%23f59e0b'/%3E%3Ccircle cx='22' cy='16' r='3' fill='%23f59e0b'/%3E%3Cpath d='M13 16 H19' stroke='%23f59e0b' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+
+  <!-- Fonts: Inter + JetBrains Mono.
+       Alternative pairings (swap the link + font-family vars):
+         • Space Grotesk + JetBrains Mono   (Linear / Vercel vibe)
+         • Geist + Geist Mono               (ultra modern, Vercel's own)
+         • IBM Plex Sans + IBM Plex Mono    (editorial, warm)
+         • Manrope + Fira Code              (friendly + classic dev mono)
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
     :root {
@@ -32,11 +43,20 @@
       --text:      #e4e4e7;
       --text-muted: #a1a1aa;
       --text-dim:  #71717a;
-      --accent:    #22c55e;
-      --accent-dim: #16a34a;
-      --accent-glow: rgba(34, 197, 94, 0.18);
-      --font-sans: -apple-system, system-ui, "Segoe UI", Inter, sans-serif;
-      --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, "Cascadia Code", monospace;
+
+      /* Accent: warm amber — "electric wire" glow.
+         Swap to one of these for a different mood:
+           • Cold cyan:    #06b6d4 / #0891b2 / rgba(6,182,212,.18)
+           • Violet:       #a78bfa / #8b5cf6 / rgba(167,139,250,.18)
+           • Coral/rose:   #fb7185 / #e11d48 / rgba(251,113,133,.18)
+           • Monochrome:   #e4e4e7 / #a1a1aa / rgba(228,228,231,.12)
+      */
+      --accent:      #f59e0b;
+      --accent-dim:  #d97706;
+      --accent-glow: rgba(245, 158, 11, 0.18);
+
+      --font-sans: 'Inter', -apple-system, system-ui, "Segoe UI", sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, "SF Mono", Menlo, Monaco, monospace;
       --max-w: 1040px;
     }
 
@@ -116,28 +136,49 @@
       width: 100%;
       height: 100vh;
       min-height: 680px;
-      margin-top: -80px;           /* pull under the fixed nav */
-      padding-top: 80px;
       overflow: hidden;
-      background-image:
-        /* top darken for title legibility */
-        linear-gradient(
-          180deg,
-          rgba(10, 10, 10, 0.92) 0%,
-          rgba(10, 10, 10, 0.62) 18%,
-          rgba(10, 10, 10, 0.15) 34%,
-          rgba(10, 10, 10, 0.15) 60%,
-          rgba(10, 10, 10, 0.85) 88%,
-          rgba(10, 10, 10, 1)    100%
-        ),
-        /* subtle emerald wash from top */
-        radial-gradient(ellipse 80% 40% at 50% 0%, rgba(34, 197, 94, 0.10), transparent 70%),
-        url(./header.png);
-      background-size: cover, cover, cover;
-      background-position: center, center top, center 62%;
-      background-repeat: no-repeat;
-      background-attachment: fixed, fixed, fixed;
-      background-color: var(--bg);
+      background: var(--bg);
+    }
+    /* absolutely-positioned bg image: gives us precise pixel offset control
+       (background-image + cover cannot do "push down 100px" cleanly) */
+    .hero-bg {
+      position: absolute;
+      top: 100px;               /* ← vertical offset to clear the title area */
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 100%;
+      width: 100%;
+      height: calc(100% - 100px);
+      object-fit: cover;
+      object-position: center 58%;
+      z-index: 0;
+      will-change: transform;
+      pointer-events: none;
+    }
+    /* layered overlays for text legibility and mood */
+    .hero::before,
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .hero::before {
+      /* vertical darken gradient — strong at top for h1, strong at bottom for ctas */
+      background: linear-gradient(
+        180deg,
+        rgba(10, 10, 10, 0.96) 0%,
+        rgba(10, 10, 10, 0.75) 14%,
+        rgba(10, 10, 10, 0.25) 30%,
+        rgba(10, 10, 10, 0.20) 58%,
+        rgba(10, 10, 10, 0.82) 88%,
+        rgba(10, 10, 10, 1)    100%
+      );
+    }
+    .hero::after {
+      /* atmospheric amber wash from top */
+      background: radial-gradient(ellipse 80% 45% at 50% 0%, rgba(245, 158, 11, 0.10), transparent 70%);
     }
     .hero-inner {
       position: relative;
@@ -152,7 +193,7 @@
       will-change: transform, opacity;
     }
     .hero-top {
-      padding-top: clamp(24px, 6vh, 72px);
+      padding-top: clamp(96px, 18vh, 200px);   /* generous top spacing below nav */
       text-align: center;
     }
     .hero-bottom {
@@ -211,13 +252,11 @@
       50%      { opacity: 1;   transform: scaleY(1); }
     }
 
-    /* mobile parallax fallback: bg stays scroll, hero shorter */
+    /* mobile fallback: hero shorter, less aggressive offset */
     @media (max-width: 820px) {
-      .hero {
-        height: auto;
-        min-height: 560px;
-        background-attachment: scroll, scroll, scroll;
-      }
+      .hero { height: auto; min-height: 620px; }
+      .hero-bg { top: 60px; height: calc(100% - 60px); }
+      .hero-top { padding-top: clamp(80px, 14vh, 120px); }
       .hero-bottom { padding-bottom: 64px; }
     }
 
@@ -454,6 +493,7 @@
   </nav>
 
   <header class="hero" role="banner" aria-label="Two coding agents passing a note between their terminals">
+    <img class="hero-bg" id="heroBg" src="./header.png" alt="" aria-hidden="true">
     <div class="hero-inner" id="heroInner">
       <div class="hero-top">
         <h1>agent-<span class="dash">wire</span></h1>
@@ -628,11 +668,12 @@
   </footer>
 
   <script>
-    // Sticky nav state + hero parallax fade
+    // Sticky nav + hero parallax: bg drifts slowly, content fades/lifts faster
     (function () {
-      const nav = document.getElementById('nav');
+      const nav       = document.getElementById('nav');
       const heroInner = document.getElementById('heroInner');
-      const hero = document.querySelector('.hero');
+      const heroBg    = document.getElementById('heroBg');
+      const hero      = document.querySelector('.hero');
       const heroHeight = () => hero.offsetHeight;
 
       let ticking = false;
@@ -643,13 +684,17 @@
         if (y > 40) nav.classList.add('scrolled');
         else nav.classList.remove('scrolled');
 
-        // hero content fade + lift (only while hero is in view)
+        // content: fade out + lift by 35% of scroll
         const h = heroHeight();
         const progress = Math.min(1, y / (h * 0.7));
         const opacity = Math.max(0, 1 - progress * 1.4);
-        const lift = y * 0.35;
+        const contentLift = y * 0.35;
         heroInner.style.opacity = opacity.toFixed(3);
-        heroInner.style.transform = `translateY(${-lift.toFixed(1)}px)`;
+        heroInner.style.transform = `translateY(${-contentLift.toFixed(1)}px)`;
+
+        // background image: drift down at 15% of scroll (classic parallax depth)
+        const bgDrift = y * 0.15;
+        heroBg.style.transform = `translate(-50%, ${bgDrift.toFixed(1)}px)`;
 
         ticking = false;
       }
@@ -661,7 +706,6 @@
         }
       }, { passive: true });
 
-      // initial paint
       onScroll();
     })();
   </script>
