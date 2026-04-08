@@ -34,6 +34,8 @@ agent-wire gives those sessions a shared bus. Each agent registers a short proje
 
 ## Install
 
+*agent-wire is not yet on npm; until it is, replace `npx -y agent-wire-bridge` with the absolute path to `dist/bridge/index.js` in your clone.*
+
 ```bash
 # Add agent-wire to Claude Code (user scope so it is available in every project)
 claude mcp add --scope user agent-wire -- npx -y agent-wire-bridge
@@ -51,7 +53,9 @@ agent-wire uses Claude Code's Channels API (currently in research preview, Claud
 claude --dangerously-load-development-channels server:agent-wire
 ```
 
-Without this flag, agent-wire still works — you just will not get push delivery into the session. Items still arrive via the piggyback mechanism on the next tool call (via `wire_read`).
+The `wire-claude` wrapper (included in the package) does this for you — just run `wire-claude` instead of `claude`.
+
+Without this flag, agent-wire still works — you just will not get push delivery into the session. Items still arrive via the piggyback mechanism on the next tool call.
 
 ---
 
@@ -89,6 +93,20 @@ While working:
 
 ---
 
+## Skip permission prompts
+
+By default Claude Code asks for permission on every `wire_*` tool call. Add a wildcard allowlist to `~/.claude/settings.json` to approve all agent-wire tools silently:
+
+```json
+{
+  "permissions": {
+    "allow": ["mcp__agent-wire__*"]
+  }
+}
+```
+
+---
+
 ## The dashboard
 
 Open `http://127.0.0.1:4747/` while the daemon is running.
@@ -117,6 +135,7 @@ No login, no setup, just open the URL.
 | `wire_read` | Pull unread items addressed to you. Fallback for clients without push; Claude Code receives items automatically as `<channel>` tags. |
 | `wire_log` | Append an entry to the shared decisions log (visible to all agents and the dashboard). |
 | `wire_log_read` | Read the shared decisions log. Optional `since` ISO timestamp filter. |
+| `wire_deregister` | Leave the wire. Called automatically by the bridge on session exit — you do not need to call this yourself. |
 
 ---
 
@@ -138,7 +157,7 @@ No login, no setup, just open the URL.
         └─────────────────────────────────────────┘
 ```
 
-One daemon runs on `127.0.0.1:4747` for the lifetime of your local session. Each Claude Code session spawns a thin stdio MCP bridge; the bridge declares a `claude/channel` capability so the daemon can push items directly into the session as `<channel>` tags without any polling. HTTP MCP clients (Cursor, Windsurf, Codex, Continue) connect to `/mcp` directly and pull via `wire_read`. All state lives in memory.
+One daemon runs on `127.0.0.1:4747` for the lifetime of your local session. Every agent session (regardless of client) spawns a thin stdio MCP bridge. For Claude Code, the bridge declares the `claude/channel` capability so the daemon can push items directly into the session as `<channel>` tags without any polling. Other MCP clients (Cursor, Windsurf, Codex, Continue) use the same bridge but receive items via pull (`wire_read`) and the universal piggyback — every successful tool response carries any pending items for that agent. All state lives in memory.
 
 ---
 
@@ -152,7 +171,7 @@ agent-wire binds only to `127.0.0.1`. It makes no outbound connections. It store
 
 - No persistence — restart the daemon and the slate is clean
 - No authentication — it is a single-user local tool
-- No orchestration — agents decide what to do with messages; nothing is routed automatically
+- No orchestration — agents decide what to do with items; nothing is routed automatically
 - No file synchronization — agents share context cards, not file contents
 - No multi-machine — loopback only, by design
 
@@ -168,7 +187,7 @@ Early. Channels is in research preview; expect bumps.
 
 ```bash
 pnpm install
-pnpm test          # 40 tests (vitest)
+pnpm test          # 45 tests (vitest)
 pnpm dev:daemon    # start daemon on :4747 with tsx
 pnpm build         # tsc + copy dashboard assets to dist/
 ```

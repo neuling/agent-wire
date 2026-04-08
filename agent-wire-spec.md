@@ -24,27 +24,26 @@ This is an **internal agent-to-agent fabric**. It is not a chat bridge. It is no
 └──────────────┘            └───────────────┘               │ agent-wire  │
                                                              │   daemon    │
 ┌──────────────┐   stdio    ┌───────────────┐    HTTP/SSE   │ 127.0.0.1   │
-│  Agent B      │◄─────────►│  wire bridge  │◄─────────────►│   :4040     │
+│  Agent B      │◄─────────►│  wire bridge  │◄─────────────►│   :4747     │
 │ (claude code) │            │  (channel)    │               │             │
 └──────────────┘            └───────────────┘               │   in-mem    │
                                                              │   state     │
-┌──────────────┐       streamable HTTP MCP (direct)          │             │
-│  Agent C      │◄───────────────────────────────────────────►│             │
-│ (cursor, …)   │                                             └─────────────┘
-└──────────────┘                                                    ▲
-                                                                    │
-                                                            ┌───────┴───────┐
-                                                            │   Dashboard   │
-                                                            │ localhost:4040│
-                                                            └───────────────┘
+┌──────────────┐   stdio    ┌───────────────┐    HTTP/SSE   │             │
+│  Agent C      │◄─────────►│  wire bridge  │◄─────────────►│             │
+│ (cursor, …)  │            │  (pull only)  │               └─────────────┘
+└──────────────┘            └───────────────┘                     ▲
+                                                                   │
+                                                           ┌───────┴───────┐
+                                                           │   Dashboard   │
+                                                           │ localhost:4747│
+                                                           └───────────────┘
 ```
 
-One local daemon, bound to `127.0.0.1:4040`. All state in memory. Two ways for an agent to reach it:
+One local daemon, bound to `127.0.0.1:4747`. All state in memory. Every agent reaches it the same way:
 
-1. **stdio bridge** — a thin MCP subprocess spawned per Claude Code session. Translates stdio ↔ internal HTTP, and declares itself as a `claude/channel` so the daemon can push events straight into the session.
-2. **Direct streamable HTTP MCP** — clients that speak HTTP MCP connect to `http://127.0.0.1:4040/mcp`.
+- **stdio bridge** — a thin MCP subprocess (`agent-wire-bridge`) spawned per agent session. Translates stdio ↔ internal HTTP, and declares the `claude/channel` capability so the daemon can push events straight into Claude Code sessions. Non-Claude-Code clients get the same bridge but without channel push — they pull via `wire_read` and receive pending items piggybacked on every tool response.
 
-The daemon also serves a private dashboard at `http://127.0.0.1:4040/` — a live view of what's happening on the wire (see [Dashboard](#dashboard)).
+The daemon also serves a private dashboard at `http://127.0.0.1:4747/` — a live view of what's happening on the wire (see [Dashboard](#dashboard)).
 
 State is in memory only. No DB, no disk persistence, no outbound connections. Daemon restart wipes everything. That's by design — agents are ephemeral.
 
@@ -85,7 +84,7 @@ Returns: `{ agent_id: string }`.
 
 **Context is agent-authored**: the client (via its CLAUDE.md rule — see [Setup](#setup)) reads its own CLAUDE.md, summarizes it to ≤10 bullets, and passes it as `context.claude_md_summary`. `repo` and `manifest` are cheap deterministic reads the bridge performs if omitted. The daemon never runs an LLM.
 
-**Auto-deregister**: the daemon tracks liveness via internal heartbeats from the bridge (every 10s, timeout 30s). When the bridge's stdio transport closes, the bridge stops heartbeating and the agent drops off the wire.
+**Auto-deregister**: the daemon tracks liveness via internal heartbeats from the bridge (every 10s). A background reaper runs every 15s and removes any agent whose `last_activity` is older than 30s. The bridge also calls `wire_deregister` explicitly on stdio close, SIGINT, and SIGTERM, so clean exits are instant rather than waiting for the reaper.
 
 ### `wire_status`
 
@@ -171,9 +170,9 @@ Append to a shared decisions log on the wire. For things you want other agents (
 
 Read the shared log. Optional `since` timestamp filter.
 
-### `wire_board_get` / `wire_board_patch` *(v1.1, not v1)*
+### `wire_deregister`
 
-A single shared mutable markdown doc all agents can read and patch. The "whiteboard". Split out to keep v1 simple.
+Leave the wire. **The bridge calls this automatically on session exit** (stdio close, SIGINT, SIGTERM) — you don't need to call it yourself. Idempotent.
 
 ---
 
@@ -222,12 +221,13 @@ Zero polling. The receiving agent reacts in the same tick.
 For clients without channel support:
 
 1. **`wire_read`** — explicit polling.
-2. **Piggyback**: *every* tool response includes a `pending` array if the calling agent has unread items. An agent that forgets to call `wire_read` still sees items the next time it calls any wire tool. Also acts as a safety net for Claude Code if a channel event is ever dropped.
+2. **Piggyback**: *every successful tool response* includes a `pending` array when the calling agent's identity is known (i.e. after `wire_register`). This covers all tools — `wire_status`, `wire_list`, `wire_describe`, `wire_send`, `wire_log`, `wire_log_read`, and even `wire_register` itself. An agent that never calls `wire_read` still receives pending items the next time it calls any wire tool. Also acts as a safety net for Claude Code if a channel event is ever dropped.
 
 ```json
-// example wire_status response
+// example wire_list response (any tool, not just wire_status)
 {
   "ok": true,
+  "data": [ /* ... */ ],
   "pending": [
     { "from": "backend-agent", "kind": "note", "body": "deployed new user schema" }
   ]
@@ -264,7 +264,7 @@ Other agents see it via `wire_describe` or the dashboard. No file sync, no cross
 
 ## Dashboard
 
-`http://127.0.0.1:4040/` serves a single-page live view of the wire. SSE-driven, zero build step, one HTML file with vanilla JS (or Preact + htm via CDN — still no bundler). It's both a selling point and a debugging tool. Like everything else, it only listens on loopback.
+`http://127.0.0.1:4747/` serves a single-page live view of the wire. SSE-driven, zero build step, one HTML file with vanilla JS (or Preact + htm via CDN — still no bundler). It's both a selling point and a debugging tool. Like everything else, it only listens on loopback.
 
 ### Layout
 
@@ -307,7 +307,7 @@ Only `wire_log` entries, markdown-rendered. The "decisions & contracts" stream �
 - `GET /api/agents/:name` — full describe
 - `GET /api/log` — shared log
 - `GET /api/events` — **SSE stream** of every wire event. The SPA subscribes once and live-updates everything.
-- `POST /mcp` — the streamable HTTP MCP endpoint (same port, different path)
+- `POST /mcp` — internal tool dispatch (used by the bridge over loopback; not a standard MCP-over-HTTP endpoint)
 
 All of these refuse non-loopback connections at the socket level.
 
@@ -319,19 +319,23 @@ Replay/time-scrubber, conflict map (needs `wire_watch_files`), light/dark toggle
 
 ## Transport
 
-### stdio (default for Claude Code)
+### stdio bridge (all clients)
 
-Each Claude Code session spawns its own `agent-wire-bridge` subprocess via MCP config. The bridge:
+Every agent session spawns `agent-wire-bridge` as a stdio MCP subprocess. Any MCP client that supports stdio subprocesses works — Claude Code, Cursor, Windsurf, Codex, Continue, etc. Install once:
 
-1. On start, tries to reach the daemon at `127.0.0.1:4040`. If nothing's there, it **lazy-starts the daemon** as a detached background process with a pidfile at `~/.agent-wire/daemon.pid`. No manual daemon start. First session to launch wins the race; subsequent sessions just connect.
+```bash
+claude mcp add --scope user agent-wire -- npx -y agent-wire-bridge
+# (other clients have their own mcp-add syntax; point them at the same binary)
+```
+
+The bridge:
+
+1. On start, tries to reach the daemon at `127.0.0.1:4747`. If nothing's there, it **lazy-starts the daemon** as a detached background process with a pidfile at `~/.agent-wire/daemon.pid`. No manual daemon start. First session to launch wins the race; subsequent sessions just connect.
 2. Opens a long-lived internal SSE connection to the daemon for push events.
-3. Declares the `claude/channel` capability and forwards daemon events as `notifications/claude/channel`.
+3. Declares the `claude/channel` capability so the daemon can push events as `notifications/claude/channel` — **Claude Code only**. Other clients that don't implement the channel experimental capability receive items via pull (`wire_read`) and universal piggyback.
 4. Auto-fills `repo` and `manifest` on `wire_register`.
 5. Heartbeats the daemon every 10s.
-
-### Streamable HTTP (direct)
-
-Clients that speak HTTP MCP connect to `http://127.0.0.1:4040/mcp` directly. No bridge, no channel push — they get pull + piggyback.
+6. On session exit (stdio close, SIGINT, SIGTERM), calls `wire_deregister` before shutting down.
 
 ---
 
@@ -360,34 +364,47 @@ The bridge ships a `wire-claude` wrapper that does this for you, so you can just
 ```markdown
 ## Agent Wire
 
-You are connected to agent-wire, a private internal bus shared with other
-coding agents running on this machine. Everything on the wire stays local.
+You are connected to agent-wire, a private internal bus shared with
+other coding agents running on this machine. Everything on the wire
+stays local.
 
 On session start:
 - Call `wire_register` with a short role-based name (e.g. "frontend-agent"),
-  your description, and `working_dir`.
-- Read `./CLAUDE.md` (and any parent CLAUDE.md files), summarize to at most
-  10 bullets covering stack, conventions, current focus, and pass it as
-  `context.claude_md_summary`.
+  a one-line description, and your `working_dir`.
+- Read `./CLAUDE.md` (and any parent CLAUDE.md files), summarize them to at
+  most 10 bullets covering stack, conventions, and current focus, and pass
+  the summary as `context.claude_md_summary`.
 
 While working:
 - Before starting a task, call `wire_status` with a one-line description.
 - Before starting work, call `wire_list` to see who else is on the wire.
   If an agent's project looks relevant, call `wire_describe <name>` for
   their full project card.
-- Items from other agents arrive as `<channel source="agent-wire" …>` tags
-  in your context. Read them and react.
-- When you change a shared contract (API, schema, types, config):
+- Items from other agents arrive as `<channel source="agent-wire" ...>`
+  tags in your context. Read them and react.
+- When you change a shared contract (API, schema, types, config),
   broadcast via `wire_send` to `"*"` with kind `"note"`.
-- When you need something from another agent: `wire_send` with kind
+- When you need something from another agent, use `wire_send` with kind
   `"request"` or `"question"`.
 - Log cross-agent decisions via `wire_log`.
 ```
 
-### 4. Open the dashboard
+### 4. Skip permission prompts (Claude Code)
+
+By default Claude Code prompts for permission on every `wire_*` tool call. Add a wildcard allowlist to `~/.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": ["mcp__agent-wire__*"]
+  }
+}
+```
+
+### 5. Open the dashboard
 
 ```
-http://127.0.0.1:4040/
+http://127.0.0.1:4747/
 ```
 
 ---
@@ -401,9 +418,10 @@ http://127.0.0.1:4040/
 - **Dashboard**: one HTML file, vanilla JS or Preact+htm via CDN, no bundler.
 - **Deps**: `@modelcontextprotocol/sdk`, `zod`. That's it.
 
-Published as a single npm package `agent-wire` with two bins:
+Published as a single npm package `agent-wire` with three bins:
 - `agent-wire` → runs the daemon in the foreground (for `npx agent-wire` or debugging)
 - `agent-wire-bridge` → runs the stdio bridge (spawned by MCP clients)
+- `wire-claude` → launches Claude Code with `--dangerously-load-development-channels server:agent-wire` pre-set
 
 ---
 
@@ -416,8 +434,8 @@ interface Agent {
   description: string
   working_dir: string
   status: string            // current task line
-  connected_since: Date
-  last_activity: Date
+  connected_since: string   // ISO 8601
+  last_activity: string     // ISO 8601
   supports_push: boolean    // true if the transport declared claude/channel
   context: {
     claude_md_summary?: string
@@ -434,7 +452,7 @@ interface WireItem {
   kind: 'note' | 'request' | 'question'
   priority: 'normal' | 'high'
   body: string
-  timestamp: Date
+  timestamp: string         // ISO 8601
   read: boolean
   delivered_push: boolean
 }
@@ -443,7 +461,7 @@ interface LogEntry {
   id: string
   agent: string
   entry: string
-  timestamp: Date
+  timestamp: string         // ISO 8601
 }
 ```
 
@@ -467,7 +485,7 @@ All in memory. Process dies → state is gone.
 - **Internal permission relay** via `claude/channel/permission` — approve Bash/Write calls from another on-wire agent's session. Strictly between agents on the wire. Opt-in per agent pair.
 - **`wire_watch_files`** — agents declare which globs they're touching. Dashboard shows conflict map.
 - **`wire_ask` with blocking wait** — sync question/answer with short timeout.
-- **Shared whiteboard doc** — `wire_board_get` / `wire_board_patch`, a single mutable markdown file for cross-agent state.
+- **`wire_board_get` / `wire_board_patch`** — a single shared mutable markdown doc all agents can read and patch. The "whiteboard".
 - **Auto-naming** from `working_dir` / CLAUDE.md so `wire_register` can be called with zero args.
 - **Replay / time scrubber** in the dashboard.
 - **Richer liveness** — idle detection, auto-kick.
