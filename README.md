@@ -4,112 +4,56 @@
   <img src="./docs/header.png" alt="agent-wire — two coding agents passing a note between their terminals" width="880">
 </p>
 
-A private local bus for your coding agents. See each other, pass notes, never leave your machine.
+<p align="center"><strong>A private local bus for your coding agents.</strong><br>See each other, pass notes, never leave your machine.</p>
 
 ---
 
-## What it does
+Two Claude Code sessions running side by side are blind to each other. One changes an API, the other breaks. You become the messenger.
 
-When you run two Claude Code sessions side by side — one building an API, one building the UI — they are blind to each other. They duplicate work, make conflicting decisions, and step on shared contracts without realizing it.
-
-agent-wire gives those sessions a shared bus. Each agent registers a short project card (working directory, stack summary, current status), broadcasts notes and requests, and receives items from peers as native `<channel>` tags injected directly into context. The daemon runs entirely on loopback. Nothing leaves the machine.
-
----
-
-## Demo
-
-![dashboard demo](./docs/demo.gif)
-
-*(screenshot/GIF coming soon)*
-
----
-
-## Features
-
-- Lives entirely on loopback — `127.0.0.1` only, no outbound connections, single-user
-- **Push delivery** into Claude Code sessions via [Channels](https://code.claude.com/docs/en/channels-reference) — no polling required
-- Pull + piggyback fallback for any MCP client (Cursor, Windsurf, Codex, Continue, ...)
-- Project context sharing: each agent publishes a short card (CLAUDE.md summary, repo info, manifest) that others can read without touching files
-- Live dashboard at `http://127.0.0.1:4747/` with agents panel, activity feed, and shared decisions log
-- Zero config — the bridge lazy-starts the daemon on first use
-- In-memory only — no database, no persistence, nothing to clean up
-
----
+agent-wire gives those sessions a shared bus. Each agent registers a short project card, broadcasts notes, and receives items from peers as live `<channel>` tags in context — in real time, without polling. Everything runs on `127.0.0.1` and in memory. Nothing leaves the machine.
 
 ## Install
 
-*agent-wire is not yet on npm; until it is, replace `npx -y agent-wire-bridge` with the absolute path to `dist/bridge/index.js` in your clone.*
-
 ```bash
-# Add agent-wire to Claude Code (user scope so it is available in every project)
 claude mcp add --scope user agent-wire -- npx -y agent-wire-bridge
 ```
 
-That is the only step. The first time a Claude Code session starts and connects, the bridge will automatically launch the daemon in the background. Subsequent sessions attach to the same running daemon.
+That's it. The bridge lazy-starts the daemon on first use. Dashboard is at **http://127.0.0.1:4747**.
 
----
+> Not yet on npm. Until it is, clone this repo and replace `npx -y agent-wire-bridge` with the absolute path to your local `dist/bridge/index.js`.
 
-## Make it pleasant to use
+## Make it actually pleasant
 
-The bare install above technically works, but two rough edges will make you want to throw your keyboard within five minutes. Both are one-time setups. Do them once and agent-wire becomes invisible infrastructure.
+Two one-time setups take agent-wire from "technically works" to "invisible infrastructure".
 
-### 1. Enable push delivery (the channels flag)
-
-**What push delivery is.** When another agent sends you something, it appears inside your Claude Code context as a `<channel source="agent-wire" from="backend-agent" kind="note">…</channel>` tag — in real time, while you're mid-thought, without anyone asking for it. That's the whole point of agent-wire: coding agents reacting to each other instead of politely taking turns.
-
-**Why there's a flag.** Push delivery rides on Claude Code's [Channels API](https://code.claude.com/docs/en/channels-reference), which is currently in research preview. Until agent-wire is added to Anthropic's official channel allowlist, Claude Code requires an explicit opt-in flag when loading it:
+**1. Enable push delivery.** Items reach other agents as live `<channel>` tags via Claude Code's [Channels API](https://code.claude.com/docs/en/channels-reference) (currently research-preview, CC ≥ 2.1.80, `claude.ai` login). Use the bundled wrapper to launch Claude with channels enabled:
 
 ```bash
-claude --dangerously-load-development-channels server:agent-wire
+wire-claude                     # same as: claude --dangerously-load-development-channels server:agent-wire
 ```
 
-The flag name is intentionally scary — Anthropic wants you to think before loading unreviewed channel code. In our case the "unreviewed" code is agent-wire itself, running entirely on your machine, so the risk is the same as running any other local dev tool.
+Without it, items still flow — they piggyback on every `wire_*` tool response instead of pushing.
 
-**The wrapper.** Typing that flag every time is unreasonable. The `wire-claude` binary shipped with the package is a one-line wrapper that invokes `claude` with the flag pre-applied:
-
-```bash
-wire-claude                    # identical to: claude --dangerously-load-development-channels server:agent-wire
-wire-claude --resume           # all flags after are forwarded to claude as usual
-```
-
-Put `wire-claude` in your shell history and you'll never see the flag again.
-
-**Requirements.** Claude Code ≥ 2.1.80, signed in via `claude.ai` (API-key sessions cannot use Channels). Team/Enterprise plans need channels enabled in org policy.
-
-**Without the flag.** agent-wire still works — registration, listing, sending, logging, dashboard, everything. You just don't get the real-time `<channel>` tags inside sessions. Items still reach every agent via the **piggyback** mechanism: every successful `wire_*` tool response automatically carries any pending items for the calling agent. So the next time your agent calls `wire_list`, `wire_status`, or any other wire tool, it receives all outstanding items in the same response. Not as magical as push, but zero-latency the moment the agent touches any mesh tool.
-
-### 2. Auto-approve `wire_*` tool calls
-
-**The problem.** By default, Claude Code asks for permission every single time a tool from an MCP server is called. For a tool that an agent might call five times per task — `wire_status` before a step, `wire_list` to check peers, `wire_send` to broadcast a contract change — that's five modal prompts per task. It makes agent-wire unusable.
-
-**The fix.** Add a wildcard entry to `~/.claude/settings.json` that pre-approves every `wire_*` tool:
+**2. Skip per-call approval prompts.** Add to `~/.claude/settings.json`:
 
 ```json
-{
-  "permissions": {
-    "allow": ["mcp__agent-wire__*"]
-  }
-}
+{ "permissions": { "allow": ["mcp__agent-wire__*"] } }
 ```
 
-The format is `mcp__<server-name>__<tool-name>`, where the server name is whatever you used in `claude mcp add` (here: `agent-wire`). The wildcard covers all current and future `wire_*` tools in one line.
+agent-wire tools only touch in-memory state — no filesystem reads, no code execution. Pre-approving them is safer than approving `Read` on your project dir.
 
-**Why this is OK.** Every agent-wire tool operates strictly on in-memory local state (register, list, send notes, append to log). None of them read your filesystem, execute code, or touch anything outside the daemon's state. Pre-approving them is the same risk as pre-approving a `Read` on your project directory — and quite a bit safer than that, since the wire only knows about itself.
+## Teach your agents to use it
 
-**Restart after editing.** Claude Code reads `settings.json` on startup. Save the file, exit any running sessions, and the next session will honor the allowlist.
+Paste into `~/.claude/CLAUDE.md` (or any project-level CLAUDE.md):
 
----
-
-## Add to your CLAUDE.md
-
-Paste this into the `CLAUDE.md` at your repo root (or user-level `~/.claude/CLAUDE.md`):
+<details>
+<summary>CLAUDE.md snippet</summary>
 
 ```markdown
 ## Agent Wire
 
 You are connected to agent-wire, a private internal bus shared with
-other coding agents running on this machine. Everything on the wire
-stays local.
+other coding agents on this machine. Everything stays local.
 
 On session start:
 - Call `wire_register` with a short role-based name (e.g. "frontend-agent"),
@@ -132,103 +76,33 @@ While working:
 - Log cross-agent decisions via `wire_log`.
 ```
 
----
-
-## The dashboard
-
-Open `http://127.0.0.1:4747/` while the daemon is running.
-
-Three columns:
-
-- **Agents** (left) — all registered agents, their current status, working directory, and time since last heartbeat
-- **Activity feed** (middle) — live stream of notes, requests, and questions flowing between agents; updates via SSE
-- **Decisions log** (right) — shared append-only log of cross-agent decisions written via `wire_log`
-
-No login, no setup, just open the URL.
-
-*(screenshot coming soon)*
-
----
+</details>
 
 ## Tools
 
-| Tool | Description |
-|------|-------------|
-| `wire_register` | Join the wire. Publishes your project card (CLAUDE.md summary, repo, manifest) so other agents can discover you. Call once at session start. |
-| `wire_status` | Announce what you are currently working on. Call before starting a task. |
-| `wire_list` | List all agents currently on the wire (lightweight, no project cards). |
-| `wire_describe` | Get the full project card for a specific agent. |
-| `wire_send` | Pass a note, request, or question to another agent (or `"*"` for broadcast). |
-| `wire_read` | Pull unread items addressed to you. Fallback for clients without push; Claude Code receives items automatically as `<channel>` tags. |
-| `wire_log` | Append an entry to the shared decisions log (visible to all agents and the dashboard). |
-| `wire_log_read` | Read the shared decisions log. Optional `since` ISO timestamp filter. |
-| `wire_deregister` | Leave the wire. Called automatically by the bridge on session exit — you do not need to call this yourself. |
+`wire_register` · `wire_status` · `wire_list` · `wire_describe` · `wire_send` · `wire_read` · `wire_log` · `wire_log_read`
 
----
+Full tool reference and data model in **[agent-wire-spec.md](./agent-wire-spec.md)**.
 
-## How it works
+## Compatibility
 
-```
-  Claude Code session A          Claude Code session B
-  ┌──────────────────────┐       ┌──────────────────────┐
-  │  agent-wire-bridge   │       │  agent-wire-bridge   │
-  │  (stdio MCP server)  │       │  (stdio MCP server)  │
-  └──────────┬───────────┘       └──────────┬───────────┘
-             │ HTTP (loopback)               │ HTTP (loopback)
-             ▼                              ▼
-        ┌─────────────────────────────────────────┐
-        │         agent-wire daemon               │
-        │         127.0.0.1:4747                  │
-        │                                         │
-        │  REST/MCP API  +  SSE push  +  dashboard│
-        └─────────────────────────────────────────┘
-```
+Works with any MCP client that supports stdio subprocesses — Claude Code, Cursor, Windsurf, Codex, Continue. Push delivery is Claude-Code-only today; everyone else receives items via the universal piggyback on any tool response.
 
-One daemon runs on `127.0.0.1:4747` for the lifetime of your local session. Every agent session (regardless of client) spawns a thin stdio MCP bridge. For Claude Code, the bridge declares the `claude/channel` capability so the daemon can push items directly into the session as `<channel>` tags without any polling. Other MCP clients (Cursor, Windsurf, Codex, Continue) use the same bridge but receive items via pull (`wire_read`) and the universal piggyback — every successful tool response carries any pending items for that agent. All state lives in memory.
+## Scope
 
----
-
-## Privacy and scope
-
-agent-wire binds only to `127.0.0.1`. It makes no outbound connections. It stores nothing to disk. There are no webhooks, no remote relay, no LAN broadcast. Every item you send on the wire is visible only to agents running as your user on this machine, for the lifetime of the daemon process.
-
----
-
-## Non-goals
-
-- No persistence — restart the daemon and the slate is clean
-- No authentication — it is a single-user local tool
-- No orchestration — agents decide what to do with items; nothing is routed automatically
-- No file synchronization — agents share context cards, not file contents
-- No multi-machine — loopback only, by design
-
----
-
-## Status
-
-Early. Channels is in research preview; expect bumps.
-
----
+Loopback only. Single user. In-memory. No persistence, no auth, no orchestration, no file sync, no multi-machine. By design.
 
 ## Development
 
 ```bash
 pnpm install
 pnpm test          # 45 tests (vitest)
-pnpm dev:daemon    # start daemon on :4747 with tsx
-pnpm build         # tsc + copy dashboard assets to dist/
+pnpm dev:daemon    # start daemon on :4747
+pnpm build
 ```
 
-The project is fully typed (TypeScript strict). `pnpm exec tsc --noEmit` for a type-only check.
+TypeScript strict. See [`agent-wire-spec.md`](./agent-wire-spec.md) for design, [`docs/superpowers/plans/`](./docs/superpowers/plans/) for the implementation plan.
 
 ---
 
-## Spec
-
-The full design document lives at [`agent-wire-spec.md`](./agent-wire-spec.md).
-
----
-
-## License
-
-MIT — see [LICENSE](./LICENSE).
+<p align="center"><sub>MIT · <a href="./LICENSE">LICENSE</a> · built with <code>wire-claude</code> itself</sub></p>
