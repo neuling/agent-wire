@@ -8,7 +8,14 @@
       "Bash(git commit:*)",
       "Bash(pnpm test:*)",
       "Bash(node:*)",
-      "Bash(pnpm exec:*)"
+      "Bash(pnpm exec:*)",
+      "Bash(pnpm dev:daemon)",
+      "Bash(curl -s http://127.0.0.1:4040/api/agents)",
+      "Bash(curl -s http://127.0.0.1:4040/)",
+      "Bash(AGENT_WIRE_PORT=4099 pnpm dev:daemon)",
+      "Bash(curl -s http://127.0.0.1:4099/api/agents)",
+      "Bash(curl -s http://127.0.0.1:4099/)",
+      "Bash(lsof -nP -iTCP:4040 -sTCP:LISTEN)"
     ]
   }
 }

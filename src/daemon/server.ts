@@ -9,7 +9,7 @@ export interface ServerHandle {
   close(): Promise<void>
 }
 
-export function startServer(state: State, port = 4040): Promise<ServerHandle> {
+export function startServer(state: State, port = 4747): Promise<ServerHandle> {
   const server = createServer(async (req, res) => {
     try {
       const remote = req.socket.remoteAddress ?? ''

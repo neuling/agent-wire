@@ -2,7 +2,7 @@
 import { State } from './state.js'
 import { startServer } from './server.js'
 
-const PORT = Number(process.env.AGENT_WIRE_PORT ?? 4040)
+const PORT = Number(process.env.AGENT_WIRE_PORT ?? 4747)
 
 async function main() {
   const state = new State()
