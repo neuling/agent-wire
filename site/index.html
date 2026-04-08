@@ -70,12 +70,24 @@
 
     /* ─────────── nav ─────────── */
     nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 10;
+      height: 64px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 24px 0;
+      padding: 0 clamp(20px, 4vw, 48px);
       font-family: var(--font-mono);
       font-size: 13px;
+      background: linear-gradient(180deg, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0) 100%);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      transition: background 0.3s ease, backdrop-filter 0.3s ease;
+    }
+    nav.scrolled {
+      background: rgba(10,10,10,0.92);
+      border-bottom: 1px solid var(--border);
     }
     nav .brand {
       color: var(--accent);
@@ -98,43 +110,116 @@
     }
     nav .links a:hover { color: var(--text); text-decoration: none; }
 
-    /* ─────────── hero ─────────── */
+    /* ─────────── hero (full-bleed parallax) ─────────── */
     .hero {
-      padding: 24px 0 72px;
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      min-height: 680px;
+      margin-top: -80px;           /* pull under the fixed nav */
+      padding-top: 80px;
+      overflow: hidden;
+      background-image:
+        /* top darken for title legibility */
+        linear-gradient(
+          180deg,
+          rgba(10, 10, 10, 0.92) 0%,
+          rgba(10, 10, 10, 0.62) 18%,
+          rgba(10, 10, 10, 0.15) 34%,
+          rgba(10, 10, 10, 0.15) 60%,
+          rgba(10, 10, 10, 0.85) 88%,
+          rgba(10, 10, 10, 1)    100%
+        ),
+        /* subtle emerald wash from top */
+        radial-gradient(ellipse 80% 40% at 50% 0%, rgba(34, 197, 94, 0.10), transparent 70%),
+        url(./header.png);
+      background-size: cover, cover, cover;
+      background-position: center, center top, center 62%;
+      background-repeat: no-repeat;
+      background-attachment: fixed, fixed, fixed;
+      background-color: var(--bg);
+    }
+    .hero-inner {
+      position: relative;
+      z-index: 2;
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      will-change: transform, opacity;
+    }
+    .hero-top {
+      padding-top: clamp(24px, 6vh, 72px);
       text-align: center;
     }
-    .hero img {
-      max-width: 100%;
-      width: 880px;
-      height: auto;
-      display: block;
-      margin: 0 auto 40px;
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      box-shadow:
-        0 40px 80px -20px rgba(0, 0, 0, 0.6),
-        0 0 60px -20px var(--accent-glow);
+    .hero-bottom {
+      padding-bottom: clamp(48px, 10vh, 120px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 22px;
     }
+
     h1 {
-      font-size: clamp(38px, 6vw, 64px);
+      font-size: clamp(44px, 8vw, 92px);
       font-weight: 700;
-      letter-spacing: -0.035em;
-      line-height: 1.05;
-      margin: 0 0 20px;
+      letter-spacing: -0.045em;
+      line-height: 0.95;
+      margin: 0 0 22px;
       font-family: var(--font-mono);
+      text-shadow: 0 2px 30px rgba(0, 0, 0, 0.8);
     }
     h1 .dash {
       color: var(--accent);
       animation: pulse 2.4s ease-in-out infinite;
     }
     .tagline {
-      font-size: clamp(17px, 2vw, 20px);
-      color: var(--text-muted);
+      font-size: clamp(17px, 2.1vw, 22px);
+      color: var(--text);
       max-width: 640px;
-      margin: 0 auto 36px;
-      line-height: 1.5;
+      margin: 0 auto;
+      line-height: 1.45;
+      text-shadow: 0 1px 20px rgba(0, 0, 0, 0.85);
     }
-    .tagline strong { color: var(--text); font-weight: 500; }
+    .tagline strong { color: var(--accent); font-weight: 500; }
+
+    /* scroll hint */
+    .scroll-hint {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      margin-top: 16px;
+      opacity: 0.8;
+    }
+    .scroll-hint .line {
+      width: 1px;
+      height: 28px;
+      background: linear-gradient(180deg, transparent, var(--text-dim));
+      animation: scroll-pulse 2.2s ease-in-out infinite;
+    }
+    @keyframes scroll-pulse {
+      0%, 100% { opacity: 0.3; transform: scaleY(0.6); }
+      50%      { opacity: 1;   transform: scaleY(1); }
+    }
+
+    /* mobile parallax fallback: bg stays scroll, hero shorter */
+    @media (max-width: 820px) {
+      .hero {
+        height: auto;
+        min-height: 560px;
+        background-attachment: scroll, scroll, scroll;
+      }
+      .hero-bottom { padding-bottom: 64px; }
+    }
 
     .cta-row {
       display: flex;
@@ -359,31 +444,39 @@
 </head>
 <body>
 
-  <div class="wrap">
+  <nav id="nav">
+    <span class="brand">agent-wire</span>
+    <span class="links">
+      <a href="#how">how it works</a>
+      <a href="#install">install</a>
+      <a href="https://github.com/neuling/agent-wire" target="_blank" rel="noopener">github</a>
+    </span>
+  </nav>
 
-    <nav>
-      <span class="brand">agent-wire</span>
-      <span class="links">
-        <a href="#how">how it works</a>
-        <a href="#install">install</a>
-        <a href="https://github.com/neuling/agent-wire" target="_blank" rel="noopener">github</a>
-      </span>
-    </nav>
-
-    <header class="hero">
-      <img src="./header.png" alt="Two coding agents passing a note between their terminals">
-      <h1>agent-<span class="dash">wire</span></h1>
-      <p class="tagline">
-        A <strong>private local bus</strong> for your coding agents.<br>
-        See each other, pass notes, never leave your machine.
-      </p>
-      <div class="cta-row">
-        <a class="btn btn-primary" href="#install">Install →</a>
-        <a class="btn btn-secondary" href="https://github.com/neuling/agent-wire" target="_blank" rel="noopener">View on GitHub</a>
+  <header class="hero" role="banner" aria-label="Two coding agents passing a note between their terminals">
+    <div class="hero-inner" id="heroInner">
+      <div class="hero-top">
+        <h1>agent-<span class="dash">wire</span></h1>
+        <p class="tagline">
+          A <strong>private local bus</strong> for your coding agents.<br>
+          See each other, pass notes, never leave your machine.
+        </p>
       </div>
-    </header>
 
-  </div>
+      <div class="hero-bottom">
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#install">Install →</a>
+          <a class="btn btn-secondary" href="https://github.com/neuling/agent-wire" target="_blank" rel="noopener">View on GitHub</a>
+        </div>
+        <div class="scroll-hint" aria-hidden="true">
+          <span>scroll</span>
+          <span class="line"></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main style="position: relative; z-index: 2; background: var(--bg);">
 
   <section class="problem">
     <div class="wrap">
@@ -519,6 +612,8 @@
     </div>
   </section>
 
+  </main>
+
   <footer>
     <div class="wrap" style="display: flex; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 12px;">
       <span>MIT · built with <code>wire-claude</code> itself</span>
@@ -531,6 +626,45 @@
       </span>
     </div>
   </footer>
+
+  <script>
+    // Sticky nav state + hero parallax fade
+    (function () {
+      const nav = document.getElementById('nav');
+      const heroInner = document.getElementById('heroInner');
+      const hero = document.querySelector('.hero');
+      const heroHeight = () => hero.offsetHeight;
+
+      let ticking = false;
+      function onScroll() {
+        const y = window.scrollY || window.pageYOffset;
+
+        // nav background after 40px
+        if (y > 40) nav.classList.add('scrolled');
+        else nav.classList.remove('scrolled');
+
+        // hero content fade + lift (only while hero is in view)
+        const h = heroHeight();
+        const progress = Math.min(1, y / (h * 0.7));
+        const opacity = Math.max(0, 1 - progress * 1.4);
+        const lift = y * 0.35;
+        heroInner.style.opacity = opacity.toFixed(3);
+        heroInner.style.transform = `translateY(${-lift.toFixed(1)}px)`;
+
+        ticking = false;
+      }
+
+      window.addEventListener('scroll', () => {
+        if (!ticking) {
+          window.requestAnimationFrame(onScroll);
+          ticking = true;
+        }
+      }, { passive: true });
+
+      // initial paint
+      onScroll();
+    })();
+  </script>
 
 </body>
 </html>
