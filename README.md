@@ -45,17 +45,54 @@ That is the only step. The first time a Claude Code session starts and connects,
 
 ---
 
-## Launching Claude Code with push enabled
+## Make it pleasant to use
 
-agent-wire uses Claude Code's Channels API (currently in research preview, Claude Code >= 2.1.80, requires `claude.ai` login). Until agent-wire is on the approved allowlist, you need to launch Claude Code with a development flag:
+The bare install above technically works, but two rough edges will make you want to throw your keyboard within five minutes. Both are one-time setups. Do them once and agent-wire becomes invisible infrastructure.
+
+### 1. Enable push delivery (the channels flag)
+
+**What push delivery is.** When another agent sends you something, it appears inside your Claude Code context as a `<channel source="agent-wire" from="backend-agent" kind="note">…</channel>` tag — in real time, while you're mid-thought, without anyone asking for it. That's the whole point of agent-wire: coding agents reacting to each other instead of politely taking turns.
+
+**Why there's a flag.** Push delivery rides on Claude Code's [Channels API](https://code.claude.com/docs/en/channels-reference), which is currently in research preview. Until agent-wire is added to Anthropic's official channel allowlist, Claude Code requires an explicit opt-in flag when loading it:
 
 ```bash
 claude --dangerously-load-development-channels server:agent-wire
 ```
 
-The `wire-claude` wrapper (included in the package) does this for you — just run `wire-claude` instead of `claude`.
+The flag name is intentionally scary — Anthropic wants you to think before loading unreviewed channel code. In our case the "unreviewed" code is agent-wire itself, running entirely on your machine, so the risk is the same as running any other local dev tool.
 
-Without this flag, agent-wire still works — you just will not get push delivery into the session. Items still arrive via the piggyback mechanism on the next tool call.
+**The wrapper.** Typing that flag every time is unreasonable. The `wire-claude` binary shipped with the package is a one-line wrapper that invokes `claude` with the flag pre-applied:
+
+```bash
+wire-claude                    # identical to: claude --dangerously-load-development-channels server:agent-wire
+wire-claude --resume           # all flags after are forwarded to claude as usual
+```
+
+Put `wire-claude` in your shell history and you'll never see the flag again.
+
+**Requirements.** Claude Code ≥ 2.1.80, signed in via `claude.ai` (API-key sessions cannot use Channels). Team/Enterprise plans need channels enabled in org policy.
+
+**Without the flag.** agent-wire still works — registration, listing, sending, logging, dashboard, everything. You just don't get the real-time `<channel>` tags inside sessions. Items still reach every agent via the **piggyback** mechanism: every successful `wire_*` tool response automatically carries any pending items for the calling agent. So the next time your agent calls `wire_list`, `wire_status`, or any other wire tool, it receives all outstanding items in the same response. Not as magical as push, but zero-latency the moment the agent touches any mesh tool.
+
+### 2. Auto-approve `wire_*` tool calls
+
+**The problem.** By default, Claude Code asks for permission every single time a tool from an MCP server is called. For a tool that an agent might call five times per task — `wire_status` before a step, `wire_list` to check peers, `wire_send` to broadcast a contract change — that's five modal prompts per task. It makes agent-wire unusable.
+
+**The fix.** Add a wildcard entry to `~/.claude/settings.json` that pre-approves every `wire_*` tool:
+
+```json
+{
+  "permissions": {
+    "allow": ["mcp__agent-wire__*"]
+  }
+}
+```
+
+The format is `mcp__<server-name>__<tool-name>`, where the server name is whatever you used in `claude mcp add` (here: `agent-wire`). The wildcard covers all current and future `wire_*` tools in one line.
+
+**Why this is OK.** Every agent-wire tool operates strictly on in-memory local state (register, list, send notes, append to log). None of them read your filesystem, execute code, or touch anything outside the daemon's state. Pre-approving them is the same risk as pre-approving a `Read` on your project directory — and quite a bit safer than that, since the wire only knows about itself.
+
+**Restart after editing.** Claude Code reads `settings.json` on startup. Save the file, exit any running sessions, and the next session will honor the allowlist.
 
 ---
 
@@ -89,20 +126,6 @@ While working:
 - When you need something from another agent, use `wire_send` with kind
   `"request"` or `"question"`.
 - Log cross-agent decisions via `wire_log`.
-```
-
----
-
-## Skip permission prompts
-
-By default Claude Code asks for permission on every `wire_*` tool call. Add a wildcard allowlist to `~/.claude/settings.json` to approve all agent-wire tools silently:
-
-```json
-{
-  "permissions": {
-    "allow": ["mcp__agent-wire__*"]
-  }
-}
 ```
 
 ---
